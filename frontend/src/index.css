@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+
+:root {
+  font-family: 'Geist', 'Inter', system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-zinc-950);
+  color: var(--color-zinc-50);
+}
+
+/* Base custom utilities */
+.glass {
+  background: rgba(24, 24, 27, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(39, 39, 42, 0.5);
+}
+
+.glow-border {
+  position: relative;
+}
+.glow-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(to right, var(--color-indigo-500), var(--color-violet-500));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.grid-bg {
+  background-image: radial-gradient(rgba(99, 102, 241, 0.05) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+@keyframes flow {
+  0% {
+    stroke-dashoffset: 24;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+.animate-flow {
+  stroke-dasharray: 8 4;
+  animation: flow 1.5s linear infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+.animate-float {
+  animation: float 5s ease-in-out infinite;
+}

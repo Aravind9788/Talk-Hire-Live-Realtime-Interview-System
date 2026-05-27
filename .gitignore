@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.env
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Node / Frontend
+node_modules/
+dist/
+frontend/dist/
+.cache/
+frontend/coverage/
+frontend/test-results/
+frontend/.vite/
+npm-debug.log*
+
+# Terraform
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.backup
+infra/terraform.tfvars
+
+# Misc
+.DS_Store
+*.log
+*.code-workspace
+SESSION_SUMMARY_*.md
+docs/*.pptx
+docs/generate_slides.py
