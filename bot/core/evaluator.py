@@ -239,11 +239,26 @@ async def auto_grade_transcript(
     tx_text = "\n".join(lines)[-14_000:]
 
     prompt = (
-        "You are a Google SDE interviewer evaluating a candidate transcript.\n"
-        "Evaluate observable rubric categories: problem_solving, code_fluency, autonomy, "
-        "cs_fundamentals, system_design, resoluteness, communication, curiosity, awareness.\n"
-        "Scale: strong_no, no, mixed, yes, strong_yes.\n"
-        "Return ONLY JSON: {\"grades\": {\"category_name\": {\"grade\": \"yes\", \"notes\": \"...\"}}}\n\n"
+        "You are an expert Google / FAANG technical interviewer evaluating a candidate interview transcript.\n"
+        "Evaluate the following dimensions:\n"
+        "1. Technical Competence: problem_solving, code_fluency, system_design, cs_fundamentals\n"
+        "2. Communication Skills: communication (articulation, thinking out loud, avoiding dead silence, STAR method structure, handling hints)\n"
+        "3. Behavioral & Culture: autonomy, curiosity, resoluteness\n\n"
+        "Grading Scale: strong_no (0), no (1), mixed (2), yes (3), strong_yes (4).\n\n"
+        "Return ONLY JSON in this exact schema:\n"
+        "{\n"
+        "  \"grades\": {\n"
+        "    \"problem_solving\": {\"grade\": \"yes\", \"notes\": \"...\"},\n"
+        "    \"code_fluency\": {\"grade\": \"yes\", \"notes\": \"...\"},\n"
+        "    \"system_design\": {\"grade\": \"yes\", \"notes\": \"...\"},\n"
+        "    \"communication\": {\"grade\": \"strong_yes\", \"notes\": \"...\"}\n"
+        "  },\n"
+        "  \"communication_score\": 3.5,\n"
+        "  \"recommendation\": \"Hire\",\n"
+        "  \"strengths\": [\"Clear problem decomposition\", \"Proactively asked about scale\"],\n"
+        "  \"blindspots\": [\"Did not address cache invalidation when data updates\"],\n"
+        "  \"action_plan\": [\"Study Redis cache eviction policies\", \"Practice dry-running code with odd edge cases\"]\n"
+        "}\n\n"
         f"Transcript:\n{tx_text}"
     )
 
@@ -251,11 +266,30 @@ async def auto_grade_transcript(
         logger.info(f"[evaluator] Mocking auto-grading for session {session_id} (no client provided)")
         submit_rubric_grade(session_id, "problem_solving", "yes", "Demonstrated clear logical structure.")
         submit_rubric_grade(session_id, "communication", "strong_yes", "Articulate and structured answers.")
-        return get_rubric_report(session_id, scope="overall")
+        submit_rubric_grade(session_id, "code_fluency", "yes", "Clean syntax and modular organization.")
+        submit_rubric_grade(session_id, "system_design", "yes", "Identified primary bottlenecks and scaling needs.")
+        report = get_rubric_report(session_id, scope="overall")
+        report["recommendation"] = "Hire"
+        report["strengths"] = [
+            "Good habit of thinking aloud before finalizing approach",
+            "Structured problem decomposition",
+        ]
+        report["blindspots"] = [
+            "Could explain time complexity earlier in the discussion",
+        ]
+        report["action_plan"] = [
+            "Practice Big-O space trade-offs on graph problems",
+            "Focus on boundary edge cases (empty input, null pointers)",
+        ]
+        return report
 
     try:
+        model_name = (
+            os.getenv("AZURE_OPENAI_TEXT_DEPLOYMENT")
+            or os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-realtime-mini")
+        )
         resp = await client.chat.completions.create(
-            model=os.getenv("AZURE_OPENAI_TEXT_DEPLOYMENT", "gpt-4o-mini"),
+            model=model_name,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             timeout=20.0,
@@ -264,7 +298,13 @@ async def auto_grade_transcript(
         for cat, info in data.get("grades", {}).items():
             if isinstance(info, dict) and "grade" in info:
                 submit_rubric_grade(session_id, cat, info["grade"], info.get("notes", ""))
-        return get_rubric_report(session_id, scope="overall")
+
+        report = get_rubric_report(session_id, scope="overall")
+        report["recommendation"] = data.get("recommendation", "Hire")
+        report["strengths"] = data.get("strengths", ["Clear thought articulation"])
+        report["blindspots"] = data.get("blindspots", ["Practice edge-case testing"])
+        report["action_plan"] = data.get("action_plan", ["Review system design patterns"])
+        return report
     except Exception as exc:
         logger.error(f"[evaluator] Auto-grading failed for session {session_id}: {exc}")
         return {"status": "error", "message": str(exc)}

@@ -33,7 +33,11 @@ class PromptManager:
         filename = "prompt_greeting_anon.md" if is_anon else "prompt_greeting_named.md"
         template = self.load_prompt_file(filename)
         name = candidate_name if candidate_name else "Candidate"
-        default_msg = f"Hello {name}, welcome to your TalkHire interview."
+        default_msg = (
+            f"Hello {name}! Welcome to your TalkHire technical interview session. "
+            f"I am your AI interviewer today. Let's begin with a quick introduction about your engineering background, "
+            f"or would you like to jump right into the first technical question?"
+        )
         msg = startup_message or default_msg
         if not template:
             return msg
@@ -71,6 +75,7 @@ class PromptManager:
         resume_summary: str = "",
         difficulty: str = "medium",
         selected_questions: list[str] | None = None,
+        jd_summary: str = "",
     ) -> str:
         """Build lean micro-prompt optimized for low-latency voice sessions (<300 tokens)."""
         env_override = os.getenv("BOT_SYSTEM_PROMPT", "").strip()
@@ -98,6 +103,9 @@ class PromptManager:
 
         if resume_summary:
             prompt_parts.append(f"## CANDIDATE RESUME SUMMARY\n{resume_summary}")
+
+        if jd_summary:
+            prompt_parts.append(f"## TARGET JOB DESCRIPTION REQUIREMENTS\n{jd_summary}")
 
         return "\n\n".join(part for part in prompt_parts if part)
 

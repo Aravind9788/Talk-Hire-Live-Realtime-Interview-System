@@ -11,6 +11,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
     "framer-motion": "^12.38.0",
     "livekit-client": "^2.15.4",
     "lucide-react": "^1.16.0",

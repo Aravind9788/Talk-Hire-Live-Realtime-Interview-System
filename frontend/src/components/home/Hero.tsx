@@ -1,56 +1,82 @@
 import React from "react";
-import { Mic, Sparkles, Shield, ArrowRight, Activity, CheckCircle2 } from "lucide-react";
+import { Mic, Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Zap, Layers, Play } from "lucide-react";
 
 interface HeroProps {
-  onStartClick: () => void;
+  onStartInterview: () => void;
+  onExploreServices: () => void;
 }
 
-export const Hero: React.FC<HeroProps> = ({ onStartClick }) => {
+export const Hero: React.FC<HeroProps> = ({ onStartInterview, onExploreServices }) => {
   return (
-    <div className="relative overflow-hidden py-16 sm:py-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-8">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-bold tracking-wide">
-          <Sparkles className="w-4 h-4 text-indigo-400" />
-          <span>Real-Time Voice AI Interview Simulator</span>
+    <section className="relative pt-16 pb-20 overflow-hidden">
+      {/* Background Radial Glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-indigo-600/15 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center space-y-8">
+        
+        {/* Top Feature Pill */}
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-xs font-semibold text-slate-300 shadow-xl">
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span>Next-Gen Real-Time Conversational AI</span>
+          <span className="text-slate-600">•</span>
+          <span className="text-indigo-400 font-bold">Sub-Second Speech Latency</span>
         </div>
 
-        <h1 className="text-5xl sm:text-7xl font-extrabold tracking-tight text-white max-w-4xl mx-auto leading-tight">
-          Practice Technical Interviews with <span className="gradient-text-primary">Human-like Voice AI</span>
-        </h1>
+        {/* Main Title */}
+        <div className="space-y-4 max-w-4xl mx-auto">
+          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white leading-tight">
+            Master High-Stakes Tech Interviews with{" "}
+            <span className="gradient-text-primary">Real-Time Voice AI</span>
+          </h1>
+          <p className="text-slate-400 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
+            Practice coding, system design, and behavioral rounds with an intelligent voice interviewer. Get instant Google-caliber scorecards, gap detection, and personalized study roadmaps.
+          </p>
+        </div>
 
-        <p className="text-slate-400 text-lg sm:text-xl max-w-2xl mx-auto leading-relaxed">
-          Simulate Google, Meta, and Amazon style coding, system design, and behavioral interviews with sub-second real-time voice conversations and instant rubric evaluation.
-        </p>
-
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
           <button
-            onClick={onStartClick}
-            className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-blue-600 text-white font-bold text-base shadow-xl shadow-indigo-600/25 hover:shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3"
+            onClick={onStartInterview}
+            className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm sm:text-base shadow-xl shadow-indigo-600/30 transition transform hover:scale-105 flex items-center justify-center gap-2"
           >
-            <span>Start Practice Interview</span>
-            <ArrowRight className="w-5 h-5" />
+            <Mic className="w-5 h-5 text-indigo-200" />
+            <span>Start Free Mock Interview</span>
+            <ArrowRight className="w-4 h-4 text-indigo-200" />
+          </button>
+
+          <button
+            onClick={onExploreServices}
+            className="w-full sm:w-auto px-6 py-4 rounded-2xl bg-slate-900/80 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-200 font-semibold text-sm sm:text-base transition flex items-center justify-center gap-2"
+          >
+            <Play className="w-4 h-4 text-indigo-400" />
+            <span>Explore All Services</span>
           </button>
         </div>
 
-        <div className="pt-12 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl mx-auto text-xs font-semibold text-slate-400">
-          <div className="flex items-center justify-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Sub-Second Latency</span>
+        {/* Trust Badges */}
+        <div className="pt-8 border-t border-slate-800/60 max-w-3xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-slate-400">
+          <div className="flex items-center justify-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Resume + JD Gap Engine</span>
           </div>
-          <div className="flex items-center justify-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Resume Aware</span>
+          <div className="flex items-center justify-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Live Coding Whiteboard</span>
           </div>
-          <div className="flex items-center justify-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Google-Style Rubric</span>
+          <div className="flex items-center justify-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Speech & Articulation Score</span>
           </div>
-          <div className="flex items-center justify-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Adaptive Difficulty</span>
+          <div className="flex items-center justify-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>100% Private & In-Memory</span>
           </div>
         </div>
+
       </div>
-    </div>
+    </section>
   );
 };

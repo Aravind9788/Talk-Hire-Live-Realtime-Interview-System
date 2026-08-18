@@ -55,10 +55,12 @@ def select_session_questions(
     topic: str = "",
     difficulty: str = "medium",
     count: int = 4,
+    round_name: str = "",
 ) -> list[str]:
     """Select a focused bank of questions for candidate interview session."""
+    target_round = round_name or round_hint
     return core_select_session_questions(
-        round_name=round_hint,
+        round_name=target_round,
         category="",
         topic=topic,
         difficulty=difficulty,
@@ -121,6 +123,10 @@ def submit_rubric_grade(
     grade: str = "",
     notes: str = "",
 ) -> dict[str, str]:
+    """Submit a rubric evaluation score and notes for a specific category.
+
+    Delegates rubric grade submission to the core evaluation service.
+    """
     target_session = session_id or _session_id_context
     return do_submit_rubric_grade(target_session, category, grade, notes)
 
@@ -131,6 +137,10 @@ def record_answer_note(
     strength: str = "",
     weakness: str = "",
 ) -> dict[str, str]:
+    """Record observed strengths and weaknesses for a candidate response.
+
+    Stores answer notes in the target session state context.
+    """
     target_session = session_id or _session_id_context
     return do_record_answer_note(target_session, question, strength, weakness)
 
@@ -142,11 +152,19 @@ def evaluate_candidate_answer(
     weakness: str = "",
     category_grades: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
+    """Evaluate candidate response and record performance observations.
+
+    Updates candidate answer notes and applies optional category grades.
+    """
     target_session = session_id or _session_id_context
     return do_evaluate_candidate_answer(target_session, question, strength, weakness, category_grades)
 
 
 def get_rubric_report(session_id: str = "", scope: str = "current") -> dict[str, Any]:
+    """Retrieve rubric evaluation report for the specified session scope.
+
+    Aggregates category scores and evaluation feedback across interview rounds.
+    """
     target_session = session_id or _session_id_context
     return do_get_rubric_report(target_session, scope)
 
@@ -157,16 +175,28 @@ def get_round_scorecard(
     category: str = "",
     scope: str = "current",
 ) -> dict[str, Any]:
+    """Compute round scorecard ratings based on recorded rubric evaluations.
+
+    Generates numerical 1-4 scale scores for candidate performance.
+    """
     target_session = session_id or _session_id_context
     return do_get_round_scorecard(target_session, round_number, category, scope)
 
 
 def get_session_summary(session_id: str = "", scope: str = "overall") -> dict[str, str]:
+    """Compile structured summary of questions, ratings, and evaluation notes.
+
+    Formats an overall or round-specific report of candidate performance.
+    """
     target_session = session_id or _session_id_context
     return do_get_session_summary(target_session, scope)
 
 
 def end_conversation(session_id: str = "") -> dict[str, Any]:
+    """Signal completion and graceful termination of the interview session.
+
+    Triggers conversation conclusion workflows and session cleanup.
+    """
     target_session = session_id or _session_id_context
     logger.info(f"[agent] Conversation end requested for session {target_session}")
     return {"__end_session__": True, "status": "ending"}

@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Voice AI Agent — Solution 5: OpenAI GPT Realtime (Azure) + livekit-agents MultimodalAgent + LiveKit"
 requires-python = ">=3.11"
 dependencies = [
-
     # ── LiveKit + OpenAI realtime
     "livekit>=0.19.0",
     "livekit-api>=1.0.0",
@@ -20,11 +19,13 @@ dependencies = [
     "onnxruntime>=1.24.4",
     "soxr>=1.0.0",
     "pyrnnoise>=0.4.3",
-    "speexdsp>=0.1.1",
     "pyloudnorm>=0.2.0",
     # ── Resume parsing
+    "python-multipart>=0.0.9",
     "PyPDF2>=3.0.0",
     "python-docx>=1.1.0",
+    "liteparse>=2.13.0",
+    "pyyaml>=6.0.3",
 ]
 
 [tool.uv]
@@ -41,6 +42,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 asyncio_mode = "auto"
 
 [tool.coverage.run]

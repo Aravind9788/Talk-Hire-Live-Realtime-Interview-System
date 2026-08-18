@@ -1,0 +1,37 @@
+# ─────────────────────────────────────────────────────────────────
+# TalkHire — LiveKit Self-Hosted Server Configuration
+# ─────────────────────────────────────────────────────────────────
+#
+# Self-hosted SFU (Selective Forwarding Unit) config for the
+# TalkHire real-time voice interview platform.
+#
+# Port 7880 is PROHIBITED in this project.
+# Signaling remapped to 7881, WebRTC media to 7882.
+# ─────────────────────────────────────────────────────────────────
+
+logging:
+  level: info
+  json: false
+
+# Unique API credentials derived from project identifiers.
+# Replace with `docker run --rm livekit/livekit-server generate-keys`
+# output before going to production.
+keys:
+  THK_aravind97: ZTKIVSQdq9UpObxVwfMvAmTpWLNUxRvaz0B_RgTnhoE
+
+# Signaling port — safe alternative to the prohibited default 7880.
+port: 7881
+
+rtc:
+  tcp_port: 0             # Disable ICE/TCP to avoid collision with port 7881
+  udp_port: 7882          # Single fixed UDP port for WebRTC media
+  use_external_ip: false  # Auto-resolve for local / Docker bridge
+  stun_servers:
+    - stun.l.google.com:19302
+    - stun1.l.google.com:19302
+
+room:
+  max_participants: 4     # Interviewer bot + candidate (+ optional observers)
+  empty_timeout: 300      # Auto-destroy empty rooms after 5 minutes
+  departure_timeout: 30   # Grace period before room teardown
+
