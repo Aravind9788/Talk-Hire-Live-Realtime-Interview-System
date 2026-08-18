@@ -16,6 +16,30 @@
 
 ---
 
+## 🎬 Live Walkthrough & Interface Showcase
+
+<div align="center">
+
+### 📺 Real-Time AI Interview Voice Studio Walkthrough
+https://github.com/user-attachments/assets/talkhire_live_demo.mp4
+
+<video src="./assets/talkhire_live_demo.mp4" controls width="100%" style="border-radius: 14px; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
+  <p>Your browser does not support the video tag. View the demo video directly in <a href="./assets/talkhire_live_demo.mp4">assets/talkhire_live_demo.mp4</a>.</p>
+</video>
+
+<br/><br/>
+
+### 📸 Studio Screenshots & Interface
+
+| 🚀 10+ Engineering Roles & Deep-Dive Setup | 💻 Live Real-Time 4-Stage Studio |
+| :---: | :---: |
+| <img src="./assets/talkhire_landing_preview.png" alt="TalkHire Onboarding" width="100%" style="border-radius: 10px; border: 1px solid #1e293b;" /> | <img src="./assets/talkhire_studio_preview.png" alt="TalkHire Live Studio" width="100%" style="border-radius: 10px; border: 1px solid #1e293b;" /> |
+| *Role presets, custom niche roles, and JD alignment* | *Dual video, lip-sync avatar, code IDE, and live subtitles* |
+
+</div>
+
+---
+
 ## 🏛️ 3D Core System Architecture
 
 ```text
