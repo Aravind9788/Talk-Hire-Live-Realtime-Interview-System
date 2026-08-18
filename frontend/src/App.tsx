@@ -82,7 +82,7 @@ export const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#080c14] text-slate-100 flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
       <Navbar 
-        activeSession={activeStep === "interview"} 
+        currentStep={activeStep} 
         onResetSession={handleGoToOnboarding}
         onNavigateLanding={handleGoToLanding}
         onOpenTerms={() => setIsTermsOpen(true)}
@@ -97,14 +97,6 @@ export const App: React.FC = () => {
           />
         ) : activeStep === "onboarding" ? (
           <div className="py-6">
-            <div className="max-w-5xl mx-auto px-4 mb-4">
-              <button
-                onClick={handleGoToLanding}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 transition"
-              >
-                ← Back to Home
-              </button>
-            </div>
             <Onboarding onStartSession={handleStartSession} />
           </div>
         ) : (
@@ -124,10 +116,12 @@ export const App: React.FC = () => {
 
       <TermsModal isOpen={isTermsOpen} onClose={() => setIsTermsOpen(false)} />
 
-      <Footer 
-        onOpenTerms={() => setIsTermsOpen(true)} 
-        onNavigateHome={handleGoToLanding}
-      />
+      {activeStep === "landing" && (
+        <Footer 
+          onOpenTerms={() => setIsTermsOpen(true)} 
+          onNavigateHome={handleGoToLanding}
+        />
+      )}
     </div>
   );
 };

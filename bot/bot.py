@@ -385,15 +385,16 @@ async def create_livekit_session(req: SessionBootstrapRequest, request: Request)
     user_id = (req.user_id or "anonymous").strip() or "anonymous"
     is_anon = _is_anon_user(user_id)
     track_preset = normalize_interview_track_preset(req.track_preset or "compressed")
-    round_hint = (req.round_hint or "").strip()
     difficulty_hint = (req.difficulty_hint or "").strip()
     topic_hint = (req.topic_hint or "").strip()
-
-    if not is_anon:
-        if not round_hint:
-            round_hint = "behavioural"
-        if not difficulty_hint:
-            difficulty_hint = "medium"
+    round_hint = (req.round_hint or "").strip()
+    if not round_hint:
+        if req.track_preset in ("coding", "system_design", "behavioural", "resume_deep_dive", "full_loop"):
+            round_hint = req.track_preset
+        elif not is_anon:
+            round_hint = "full_loop"
+        else:
+            round_hint = "full_loop"
 
     if not difficulty_hint:
         difficulty_hint = "medium"

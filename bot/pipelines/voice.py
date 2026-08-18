@@ -72,7 +72,7 @@ class TalkHireRoomConfig:
         or os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-realtime-mini")
     )
     voice_id: str = field(
-        default_factory=lambda: os.getenv("OPENAI_VOICE", "alloy")
+        default_factory=lambda: os.getenv("OPENAI_VOICE", "shimmer")
     )
     idle_timeout_secs: float = field(
         default_factory=lambda: float(os.getenv("USER_IDLE_TIMEOUT_SECS", "300"))

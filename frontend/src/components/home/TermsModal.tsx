@@ -33,7 +33,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onClose }) => {
               Terms & Legal Agreements
             </h3>
             <p className="text-xs text-slate-400">
-              TalkHir<span className="opacity-45">e</span> User Privacy and Service Guidelines
+              TalkHir<span className="opacity-75 text-white/90">e</span> User Privacy and Service Guidelines
             </p>
           </div>
         </div>

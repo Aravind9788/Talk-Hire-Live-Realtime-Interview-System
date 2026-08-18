@@ -23,7 +23,7 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTerms, onNavigateHome }) =
               </div>
               <span className="font-extrabold text-xl tracking-tight text-white">Talk</span>
               <span className="font-extrabold text-xl tracking-tight gradient-text-primary">
-                Hir<span className="opacity-45 text-white">e</span>
+                Hir<span className="opacity-75 text-white/90">e</span>
               </span>
             </div>
             <p className="text-xs text-slate-400 max-w-sm leading-relaxed">

@@ -60,7 +60,7 @@ export const Founder: React.FC = () => {
                   Aravind
                 </h3>
                 <p className="text-indigo-400 font-medium text-sm">
-                  Founder & Creator of TalkHir<span className="opacity-45">e</span>
+                  Founder & Creator of TalkHir<span className="opacity-75 text-white/90">e</span>
                 </p>
               </div>
 

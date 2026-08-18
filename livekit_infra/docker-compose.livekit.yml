@@ -46,6 +46,7 @@ services:
       - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-THK_aravind97}
       - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-ZTKIVSQdq9UpObxVwfMvAmTpWLNUxRvaz0B_RgTnhoE}
       - APP_PORT=7862
+      - OPENAI_VOICE=shimmer
     depends_on:
       livekit-server:
         condition: service_started

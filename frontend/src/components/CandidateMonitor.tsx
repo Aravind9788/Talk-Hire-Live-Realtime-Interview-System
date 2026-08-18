@@ -7,7 +7,7 @@ import {
   Video, VideoOff, ShieldAlert, ShieldCheck, Eye, EyeOff, Captions,
   Layers, ArrowRight, CheckCircle2, ChevronRight, User, Terminal,
   Cpu, Database, Server, Compass, BookOpen, Clock, Activity, Zap,
-  Lock, AlertTriangle, Info
+  Lock, AlertTriangle, Info, Target
 } from "lucide-react";
 import { AIAvatar } from "./AIAvatar";
 import { getFaceLandmarker, analyzeFacePose } from "../utils/proctorEngine";
@@ -85,9 +85,19 @@ export const CandidateMonitor: React.FC<CandidateMonitorProps> = ({
   selectedRound = "full_loop",
   onEndSession,
 }) => {
-  // Current Active Stage (1 to 4) - Managed by AI transitions with Progressive Guided Lock
-  const [activeStage, setActiveStage] = useState<number>(1);
-  const [unlockedStage, setUnlockedStage] = useState<number>(1);
+  const isFullLoop = selectedRound === "full_loop";
+
+  // Determine starting stage based on track preset
+  const getInitialStage = () => {
+    if (selectedRound === "coding") return 3;
+    if (selectedRound === "system_design") return 2;
+    if (selectedRound === "behavioural") return 4;
+    return 1;
+  };
+
+  // Current Active Stage
+  const [activeStage, setActiveStage] = useState<number>(getInitialStage());
+  const [unlockedStage, setUnlockedStage] = useState<number>(getInitialStage());
 
   // Audio & Mic Controls
   const [isMuted, setIsMuted] = useState(false);
@@ -95,10 +105,24 @@ export const CandidateMonitor: React.FC<CandidateMonitorProps> = ({
   const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
   const [audioLevel, setAudioLevel] = useState(0);
 
-  // Live Real-Time Subtitles
-  const [currentSubtitle, setCurrentSubtitle] = useState<string>(
-    `Hello ${participantName}! Welcome to your TalkHire technical interview for the ${jobRole} position. I am Maya, your AI lead interviewer. Let's begin with Stage 1: Resume & Background walkthrough. Could you introduce yourself and tell me about the most technically challenging project you've built?`
-  );
+  // Initial subtitle greeting tailored to selected track
+  const getInitialGreeting = () => {
+    if (selectedRound === "coding") {
+      return `Hello ${participantName}! Welcome to your Live Coding interview for the ${jobRole} position. I am Maya. Let's begin directly with your algorithmic challenge. Please check your live scratchpad and talk through your approach.`;
+    }
+    if (selectedRound === "system_design") {
+      return `Hello ${participantName}! Welcome to your System Design interview for the ${jobRole} position. I am Maya. Let's dive straight into high-throughput distributed architecture, capacity planning, and scaling trade-offs.`;
+    }
+    if (selectedRound === "behavioural") {
+      return `Hello ${participantName}! Welcome to your Behavioral & Leadership interview for the ${jobRole} position. I am Maya. Let's explore your past leadership, conflict resolution, and technical ownership using the STAR method.`;
+    }
+    if (selectedRound === "resume_deep_dive") {
+      return `Hello ${participantName}! Welcome to your Resume & Experience Deep-Dive for the ${jobRole} position. I am Maya. Let's verify your past projects, architecture decisions, and quantifiable impact.`;
+    }
+    return `Hello ${participantName}! Welcome to your TalkHire technical interview for the ${jobRole} position. I am Maya, your AI lead interviewer. Let's begin with Stage 1: Resume & Background walkthrough. Could you introduce yourself and tell me about the most technically challenging project you've built?`;
+  };
+
+  const [currentSubtitle, setCurrentSubtitle] = useState<string>(getInitialGreeting());
 
   // Video & Camera Controls
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
@@ -110,29 +134,46 @@ export const CandidateMonitor: React.FC<CandidateMonitorProps> = ({
   const [proctorFlagsCount, setProctorFlagsCount] = useState(0);
   const [integrityScore, setIntegrityScore] = useState(100);
 
-  // Live Multi-Round Rubrics (Strict Default: Pending / 0.0)
-  const [scores, setScores] = useState<ScorecardCategory[]>([
-    { category: "resume_depth", human_category: "Resume & Tech Depth", stage_name: "Stage 1", grade: "Pending", score: 0 },
-    { category: "system_design", human_category: "System Architecture", stage_name: "Stage 2", grade: "Pending", score: 0 },
-    { category: "code_fluency", human_category: "Code Fluency & DSA", stage_name: "Stage 3", grade: "Pending", score: 0 },
-    { category: "behavioural", human_category: "Behavioral & STAR", stage_name: "Stage 4", grade: "Pending", score: 0 },
-  ]);
+  // Live Rubrics (Configured for Full-Loop vs Targeted Single Round)
+  const getInitialRubrics = (): ScorecardCategory[] => {
+    if (selectedRound === "coding") {
+      return [
+        { category: "code_fluency", human_category: "Code Fluency & Algorithms", stage_name: "Coding Round", grade: "Pending", score: 0 },
+      ];
+    }
+    if (selectedRound === "system_design") {
+      return [
+        { category: "system_design", human_category: "System Architecture", stage_name: "Design Round", grade: "Pending", score: 0 },
+      ];
+    }
+    if (selectedRound === "behavioural") {
+      return [
+        { category: "behavioural", human_category: "Behavioral & STAR", stage_name: "Behavioral Round", grade: "Pending", score: 0 },
+      ];
+    }
+    if (selectedRound === "resume_deep_dive") {
+      return [
+        { category: "resume_depth", human_category: "Resume & Tech Depth", stage_name: "Resume Round", grade: "Pending", score: 0 },
+      ];
+    }
+    return [
+      { category: "resume_depth", human_category: "Resume & Tech Depth", stage_name: "Stage 1", grade: "Pending", score: 0 },
+      { category: "system_design", human_category: "System Architecture", stage_name: "Stage 2", grade: "Pending", score: 0 },
+      { category: "code_fluency", human_category: "Code Fluency & DSA", stage_name: "Stage 3", grade: "Pending", score: 0 },
+      { category: "behavioural", human_category: "Behavioral & STAR", stage_name: "Stage 4", grade: "Pending", score: 0 },
+    ];
+  };
+
+  const [scores, setScores] = useState<ScorecardCategory[]>(getInitialRubrics());
 
   // Stage-Specific Workspaces
-  // Stage 1: Resume Notes
   const [resumeNotes, setResumeNotes] = useState("");
-
-  // Stage 2: Architecture & System Design Workspace
   const [archNotes, setArchNotes] = useState(
     `# System Architecture Plan\n- Expected Scale: 50,000 Read RPS / 5,000 Write RPS\n- Data Storage: Primary PostgreSQL + Redis Cluster for hot reads\n- Ingestion: Kafka partitioned topics for async event processing\n- Availability SLA: 99.99% with multi-region replication`
   );
-
-  // Stage 3: Live Coding Workspace
   const [codeLanguage, setCodeLanguage] = useState<"python" | "typescript" | "go" | "java">("python");
   const [codeContent, setCodeContent] = useState(DEFAULT_CODE_SNIPPET["python"]);
   const [codeSharedToast, setCodeSharedToast] = useState(false);
-
-  // Stage 4: Behavioral STAR Workspace
   const [starNotes, setStarNotes] = useState("");
 
   // Toast States
@@ -489,7 +530,7 @@ export const CandidateMonitor: React.FC<CandidateMonitorProps> = ({
   };
 
   const handleDownloadScorecard = () => {
-    const reportText = `TALKHIRE COMPREHENSIVE MULTI-ROUND INTERVIEW SCORECARD
+    const reportText = `TALKHIRE TECHNICAL INTERVIEW SCORECARD
 ============================================================
 Candidate: ${participantName}
 Target Role: ${jobRole}
@@ -517,7 +558,7 @@ Date: ${new Date().toLocaleDateString()}
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `talkhire-full-loop-scorecard-${participantName.toLowerCase().replace(/\s+/g, "_")}.txt`;
+    a.download = `talkhire-scorecard-${participantName.toLowerCase().replace(/\s+/g, "_")}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -543,15 +584,15 @@ Date: ${new Date().toLocaleDateString()}
               </span>
             </h2>
             <p className="text-[11px] text-slate-400">
-              Full-Loop Master • Sub-Second Adaptive Voice AI Studio
+              {isFullLoop ? "Full-Loop Master • 4-Stage Studio" : `Targeted Single Round: ${scores[0]?.human_category}`}
             </p>
           </div>
         </div>
 
         {/* Status & Controls */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 justify-end">
           {/* Proctoring Integrity Pill */}
-          <div className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 border transition-all ${
+          <div className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 border transition-all ${
             gazeStatus === "focused"
               ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
               : "bg-amber-500/15 border-amber-500/40 text-amber-300 animate-pulse"
@@ -569,7 +610,7 @@ Date: ${new Date().toLocaleDateString()}
             )}
           </div>
 
-          <div className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
+          <div className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 transition-all ${
             botSpeaking 
               ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 glow-primary" 
               : "bg-slate-900 text-slate-500 border border-slate-800"
@@ -580,7 +621,7 @@ Date: ${new Date().toLocaleDateString()}
 
           <button
             onClick={handleEndInterview}
-            className="px-3.5 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 font-bold text-xs transition flex items-center gap-1.5"
+            className="px-3 sm:px-3.5 py-1 sm:py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 font-bold text-[11px] sm:text-xs transition flex items-center gap-1.5"
           >
             <PhoneOff className="w-3.5 h-3.5" />
             <span>End Call</span>
@@ -599,57 +640,69 @@ Date: ${new Date().toLocaleDateString()}
         </div>
       )}
 
-      {/* Progressive Guided Lock - Multi-Stage Full Loop Progress Tracker Bar */}
-      <div className="glass-panel p-3.5 rounded-2xl border border-slate-800 bg-slate-950/70">
-        <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
-          {STAGES.map((stg, idx) => {
-            const isCurrent = activeStage === stg.id;
-            const isCompleted = activeStage > stg.id;
-            const isLocked = stg.id > unlockedStage;
-            const Icon = stg.icon;
-            return (
-              <React.Fragment key={stg.id}>
-                <div 
-                  onClick={() => {
-                    if (!isLocked) {
-                      setActiveStage(stg.id);
-                    }
-                  }}
-                  className={`flex items-center gap-2.5 px-4 py-2 rounded-xl transition border text-xs whitespace-nowrap ${
-                    isCurrent
-                      ? "bg-indigo-600/25 border-indigo-500 text-white font-bold shadow-md shadow-indigo-600/20"
-                      : isCompleted
-                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300 font-medium cursor-pointer hover:bg-emerald-500/20"
-                      : "bg-slate-900/40 border-slate-800 text-slate-500 cursor-not-allowed opacity-75"
-                  }`}
-                >
-                  <div className={`p-1.5 rounded-lg ${
-                    isCurrent 
-                      ? "bg-indigo-600 text-white" 
-                      : isCompleted 
-                      ? "bg-emerald-500 text-slate-950" 
-                      : "bg-slate-800 text-slate-500"
-                  }`}>
-                    {isCompleted ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : isLocked ? <Lock className="w-3.5 h-3.5" /> : <Icon className="w-3.5 h-3.5" />}
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-bold leading-tight flex items-center gap-1.5">
-                      <span>{stg.name}</span>
-                      {isLocked && <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">Locked</span>}
+      {/* Mode Tracker Banner (Full Loop Stepper vs Targeted Single Round) */}
+      {isFullLoop ? (
+        <div className="glass-panel p-3.5 rounded-2xl border border-slate-800 bg-slate-950/70">
+          <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
+            {STAGES.map((stg, idx) => {
+              const isCurrent = activeStage === stg.id;
+              const isCompleted = activeStage > stg.id;
+              const isLocked = stg.id > unlockedStage;
+              const Icon = stg.icon;
+              return (
+                <React.Fragment key={stg.id}>
+                  <div 
+                    onClick={() => {
+                      if (!isLocked) {
+                        setActiveStage(stg.id);
+                      }
+                    }}
+                    className={`flex items-center gap-2.5 px-4 py-2 rounded-xl transition border text-xs whitespace-nowrap ${
+                      isCurrent
+                        ? "bg-indigo-600/25 border-indigo-500 text-white font-bold shadow-md shadow-indigo-600/20"
+                        : isCompleted
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300 font-medium cursor-pointer hover:bg-emerald-500/20"
+                        : "bg-slate-900/40 border-slate-800 text-slate-500 cursor-not-allowed opacity-75"
+                    }`}
+                  >
+                    <div className={`p-1.5 rounded-lg ${
+                      isCurrent 
+                        ? "bg-indigo-600 text-white" 
+                        : isCompleted 
+                        ? "bg-emerald-500 text-slate-950" 
+                        : "bg-slate-800 text-slate-500"
+                    }`}>
+                      {isCompleted ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : isLocked ? <Lock className="w-3.5 h-3.5" /> : <Icon className="w-3.5 h-3.5" />}
                     </div>
-                    <div className="text-[10px] opacity-70 leading-none mt-0.5">
-                      {isCurrent ? "Active Stage" : isCompleted ? "Completed" : `Unlocks after Stage ${stg.id - 1}`}
+                    <div>
+                      <div className="text-[11px] font-bold leading-tight flex items-center gap-1.5">
+                        <span>{stg.name}</span>
+                        {isLocked && <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">Locked</span>}
+                      </div>
+                      <div className="text-[10px] opacity-70 leading-none mt-0.5">
+                        {isCurrent ? "Active Stage" : isCompleted ? "Completed" : `Unlocks after Stage ${stg.id - 1}`}
+                      </div>
                     </div>
                   </div>
-                </div>
-                {idx < STAGES.length - 1 && (
-                  <ChevronRight className="w-4 h-4 text-slate-700 shrink-0 hidden md:block" />
-                )}
-              </React.Fragment>
-            );
-          })}
+                  {idx < STAGES.length - 1 && (
+                    <ChevronRight className="w-4 h-4 text-slate-700 shrink-0 hidden md:block" />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="glass-panel px-4 py-2.5 rounded-2xl border border-indigo-500/30 bg-slate-950/70 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold text-white">
+            <Target className="w-4 h-4 text-indigo-400" />
+            <span>Targeted Track: {scores[0]?.human_category}</span>
+          </div>
+          <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold">
+            Single-Round Focus Mode
+          </span>
+        </div>
+      )}
 
       {/* Studio Workspace Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -731,7 +784,7 @@ Date: ${new Date().toLocaleDateString()}
             <div className="flex items-center justify-between pb-1.5 border-b border-slate-800/80 text-xs">
               <div className="flex items-center gap-1.5 text-white font-bold">
                 <Captions className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Live Voice Subtitles ({STAGES.find(s => s.id === activeStage)?.short})</span>
+                <span>Live Voice Subtitles</span>
               </div>
               <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold transition ${
                 botSpeaking 
@@ -810,7 +863,7 @@ Date: ${new Date().toLocaleDateString()}
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2 text-white font-bold text-sm">
                   <User className="w-4 h-4 text-indigo-400" />
-                  <span>Stage 1: Candidate Background & Experience Verification</span>
+                  <span>Resume & Past Experience Cross-Examination</span>
                 </div>
                 <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-semibold">
                   Conversational Mode
@@ -836,7 +889,7 @@ Date: ${new Date().toLocaleDateString()}
               <div className="p-3.5 rounded-xl bg-indigo-950/20 border border-indigo-500/30 space-y-2">
                 <h4 className="text-xs font-bold text-indigo-200 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Key Discussion Goals for this Stage:</span>
+                  <span>Key Discussion Goals for this Round:</span>
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-300">
                   <div className="flex items-start gap-1.5">
@@ -882,7 +935,7 @@ Date: ${new Date().toLocaleDateString()}
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2 text-white font-bold text-sm">
                   <Layers className="w-4 h-4 text-indigo-400" />
-                  <span>Stage 2: System Architecture & Scalability Planner</span>
+                  <span>System Architecture & Scalability Planner</span>
                 </div>
                 <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold">
                   Design & Trade-offs Mode
@@ -942,7 +995,7 @@ Date: ${new Date().toLocaleDateString()}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2 text-white font-bold text-sm">
                   <Code2 className="w-4 h-4 text-indigo-400" />
-                  <span>Stage 3: Live Code Editor & Algorithm Scratchpad</span>
+                  <span>Live Code Editor & Algorithm Scratchpad</span>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1013,7 +1066,7 @@ Date: ${new Date().toLocaleDateString()}
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2 text-white font-bold text-sm">
                   <CheckCircle2 className="w-4 h-4 text-indigo-400" />
-                  <span>Stage 4: STAR Method Behavioral & Leadership Framework</span>
+                  <span>STAR Method Behavioral & Leadership Framework</span>
                 </div>
                 <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold">
                   STAR Method Active
@@ -1059,32 +1112,28 @@ Date: ${new Date().toLocaleDateString()}
             </div>
           )}
 
-          {/* Live Multi-Stage Rubric Evaluation Matrix */}
+          {/* Rubric Evaluation Matrix */}
           <div className="glass-panel p-4 rounded-2xl border border-slate-800 space-y-3">
             <div className="flex items-center justify-between text-xs pb-1 border-b border-slate-800">
               <span className="font-bold text-white flex items-center gap-1.5">
                 <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Full-Loop 4-Stage Rubric Matrix</span>
+                <span>{isFullLoop ? "Full-Loop 4-Stage Rubric Matrix" : "Targeted Discipline Rubric Matrix"}</span>
               </span>
-              <span className="text-[10px] text-slate-400">Strict Google 1.0 - 4.0 Standard</span>
+              <span className="text-[10px] text-slate-400">Strict 1.0 - 4.0 Standard</span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className={`grid gap-2.5 ${isFullLoop ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-1"}`}>
               {scores.map((sc) => (
                 <div
                   key={sc.category}
-                  className={`p-2.5 rounded-xl border space-y-1 text-center transition ${
-                    activeStage === (sc.category === "resume_depth" ? 1 : sc.category === "system_design" ? 2 : sc.category === "code_fluency" ? 3 : 4)
-                      ? "bg-indigo-600/15 border-indigo-500/50 shadow-md"
-                      : "bg-slate-900/60 border-slate-800"
-                  }`}
+                  className="p-3 rounded-xl border space-y-1 text-center bg-indigo-600/15 border-indigo-500/50 shadow-md transition"
                 >
                   <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider">{sc.stage_name}</p>
-                  <p className="text-[11px] font-medium text-slate-300 truncate">{sc.human_category}</p>
-                  <p className="text-sm font-black text-white font-mono">
+                  <p className="text-xs font-bold text-slate-200">{sc.human_category}</p>
+                  <p className="text-base font-black text-white font-mono mt-0.5">
                     {sc.score > 0 ? `${sc.score.toFixed(1)} / 4.0` : "—"}
                   </p>
-                  <span className={`inline-block text-[9px] uppercase font-bold px-2 py-0.5 rounded-full ${
+                  <span className={`inline-block text-[9px] uppercase font-bold px-2.5 py-0.5 rounded-full ${
                     sc.score >= 3.5 ? "bg-emerald-500/20 text-emerald-400" :
                     sc.score >= 2.5 ? "bg-indigo-500/20 text-indigo-400" :
                     sc.score > 0 ? "bg-rose-500/20 text-rose-400" : "bg-slate-800 text-slate-500"
@@ -1114,18 +1163,18 @@ Date: ${new Date().toLocaleDateString()}
                     : "bg-rose-500/10 border-rose-500/20 text-rose-400"
                 }`}>
                   <Award className="w-3.5 h-3.5" />
-                  <span>Full-Loop Session Completed</span>
+                  <span>Session Completed</span>
                 </div>
                 <h3 className="text-2xl font-extrabold text-white">
-                  Full-Loop Debrief Scorecard
+                  Technical Debrief Scorecard
                 </h3>
                 <p className="text-xs text-slate-400">
-                  {participantName} • {jobRole} • Track: FULL COMPREHENSIVE LOOP
+                  {participantName} • {jobRole} • Track: {selectedRound.toUpperCase()}
                 </p>
               </div>
 
               <div className="text-right">
-                <div className="text-xs font-semibold text-slate-400">Overall Loop Verdict</div>
+                <div className="text-xs font-semibold text-slate-400">Overall Verdict</div>
                 <div className={`text-xl font-black font-mono ${
                   debriefData.overall_score >= 2.5 ? "text-emerald-400" : "text-rose-400"
                 }`}>
@@ -1137,13 +1186,13 @@ Date: ${new Date().toLocaleDateString()}
               </div>
             </div>
 
-            {/* Stage-by-Stage Breakdown Grid */}
+            {/* Breakdown Grid */}
             <div className="space-y-2">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Per-Stage Score Breakdown</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Evaluation Breakdown</h4>
+              <div className={`grid gap-2.5 ${isFullLoop ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-1"}`}>
                 {debriefData.stage_breakdown.map((sb, idx) => (
                   <div key={idx} className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-center">
-                    <p className="text-[10px] text-indigo-400 font-semibold uppercase">Stage {idx + 1}</p>
+                    <p className="text-[10px] text-indigo-400 font-semibold uppercase">{isFullLoop ? `Stage ${idx + 1}` : "Discipline"}</p>
                     <p className="text-[11px] text-slate-300 truncate font-medium">{sb.stage}</p>
                     <p className="text-base font-black text-white font-mono mt-0.5">
                       {sb.score > 0 ? `${sb.score.toFixed(1)} / 4.0` : "—"}
@@ -1161,7 +1210,7 @@ Date: ${new Date().toLocaleDateString()}
               <div className="space-y-2">
                 <h4 className="font-bold text-emerald-400 flex items-center gap-1.5">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Key Strengths Observed Across Loop</span>
+                  <span>Key Strengths Observed</span>
                 </h4>
                 <ul className="space-y-1.5 text-slate-300 pl-2">
                   {debriefData.strengths.map((s, idx) => (
@@ -1185,7 +1234,7 @@ Date: ${new Date().toLocaleDateString()}
               <div className="space-y-2">
                 <h4 className="font-bold text-indigo-400 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4" />
-                  <span>Recommended Stage-by-Stage Study Plan</span>
+                  <span>Recommended Next Steps & Study Plan</span>
                 </h4>
                 <ul className="space-y-1.5 text-slate-300 pl-2">
                   {debriefData.action_plan.map((a, idx) => (
@@ -1202,7 +1251,7 @@ Date: ${new Date().toLocaleDateString()}
                 className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-700 text-white font-semibold text-xs flex items-center justify-center gap-2 transition"
               >
                 <Download className="w-4 h-4 text-indigo-400" />
-                <span>Export Loop Scorecard (.TXT)</span>
+                <span>Export Scorecard (.TXT)</span>
               </button>
 
               <button

@@ -30,7 +30,7 @@ def test_env_resolution_and_model_names():
     )
     assert config.room_name == "test-room-101"
     assert config.realtime_model in ("gpt-realtime-mini", "gpt-4o-realtime-preview")
-    assert config.voice_id == "alloy"
+    assert config.voice_id in ("shimmer", "alloy")
 
     client = create_azure_openai_client()
     assert client is not None

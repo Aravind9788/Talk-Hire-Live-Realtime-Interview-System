@@ -15,14 +15,14 @@ export const Hero: React.FC<HeroProps> = ({ onStartInterview, onExploreServices 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center space-y-8">
         
         {/* Top Feature Pill */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-xs font-semibold text-slate-300 shadow-xl">
-          <span className="flex h-2 w-2 relative">
+        <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-[11px] sm:text-xs font-semibold text-slate-300 shadow-xl max-w-full">
+          <span className="flex h-2 w-2 relative shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
           <span>Next-Gen Real-Time Conversational AI</span>
-          <span className="text-slate-600">•</span>
-          <span className="text-indigo-400 font-bold">Sub-Second Speech Latency</span>
+          <span className="hidden sm:inline text-slate-600">•</span>
+          <span className="hidden sm:inline text-indigo-400 font-bold">Sub-Second Speech Latency</span>
         </div>
 
         {/* Main Title */}

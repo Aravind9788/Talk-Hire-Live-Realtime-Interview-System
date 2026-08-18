@@ -233,9 +233,11 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onStartSession }) => {
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
       {/* Header Banner */}
       <div className="text-center space-y-3">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold">
-          <Activity className="w-3.5 h-3.5" />
-          <span>Enterprise Real-Time Conversational AI • Sub-Second Latency</span>
+        <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[11px] sm:text-xs font-semibold max-w-full">
+          <Activity className="w-3.5 h-3.5 shrink-0" />
+          <span>Enterprise Real-Time Conversational AI</span>
+          <span className="hidden sm:inline">•</span>
+          <span className="hidden sm:inline">Sub-Second Latency</span>
         </div>
         <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white">
           Real-Time Voice <span className="gradient-text-primary">AI Technical Interview</span> Studio
