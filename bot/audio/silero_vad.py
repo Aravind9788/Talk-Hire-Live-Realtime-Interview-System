@@ -28,8 +28,15 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-import pyloudnorm as pyln
-from loguru import logger
+try:
+    import pyloudnorm as pyln
+except ImportError:
+    pyln = None
+try:
+    from loguru import logger
+except ImportError:
+    import logging
+    logger = logging.getLogger("talkhire.vad")
 
 # Reset internal ONNX model state every N seconds (prevents memory growth).
 _MODEL_RESET_INTERVAL = 5.0
@@ -269,16 +276,21 @@ class SileroVADAnalyzer:
         speech ≈ 0.8-1.0.  Our previous simple RMS/32768 gave ~0.05-0.15,
         which never reached min_volume=0.26 — that's why Silero never fired.
         """
-        audio_np = np.frombuffer(frame, dtype=np.int16)
-        audio_float = audio_np.astype(np.float64)
+        if pyln is None:
+            # Fallback RMS calculation normalized to [0, 1]
+            audio_np = np.frombuffer(frame, dtype=np.int16)
+            rms = np.sqrt(np.mean(audio_np.astype(np.float64) ** 2))
+            volume = max(0.0, min(1.0, rms / 32768.0 * 5.0))
+        else:
+            audio_np = np.frombuffer(frame, dtype=np.int16)
+            audio_float = audio_np.astype(np.float64)
 
-        block_size = audio_np.size / self.SAMPLE_RATE
-        meter = pyln.Meter(self.SAMPLE_RATE, block_size=block_size)
-        loudness = meter.integrated_loudness(audio_float)
+            block_size = audio_np.size / self.SAMPLE_RATE
+            meter = pyln.Meter(self.SAMPLE_RATE, block_size=block_size)
+            loudness = meter.integrated_loudness(audio_float)
 
-        # Normalize loudness from [-20, 80] range to [0, 1]
-        # (matches Pipecat's normalize_value)
-        volume = max(0.0, min(1.0, (loudness - (-20)) / (80 - (-20))))
+            # Normalize loudness from [-20, 80] range to [0, 1]
+            volume = max(0.0, min(1.0, (loudness - (-20)) / (80 - (-20))))
 
         smoothed = _SMOOTHING_FACTOR * volume + (1.0 - _SMOOTHING_FACTOR) * self._prev_volume
         self._prev_volume = smoothed

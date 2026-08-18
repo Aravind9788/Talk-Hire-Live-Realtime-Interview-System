@@ -1,79 +1,70 @@
+"""FastAPI web server and LiveKit room bot runner for TalkHire."""
+
 from __future__ import annotations
 
 import asyncio
 import json
 import os
 import io
-import PyPDF2
-import docx
-import openai
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Optional
 from uuid import uuid4
 
+import PyPDF2
+import docx
+import openai
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from livekit import api
-from loguru import logger
+try:
+    from loguru import logger
+except ImportError:
+    import logging
+    logger = logging.getLogger("talkhire.bot")
 from pydantic import BaseModel, Field
 
 from bot.pipelines.voice import (
-    AuraRoomConfig,
-    build_room_config,
+    TalkHireRoomConfig,
+    build_talkhire_room_config,
     run_room_bot,
-    _get_session_service,
+    get_session_service,
     _is_anon_user,
 )
 from bot.agent import select_session_questions
+from bot.core.prompts import PromptManager
+from bot.core.session import FileSessionService
 
 load_dotenv()
 
 _FRONTEND_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
 _room_tasks: dict[str, asyncio.Task[None]] = {}
 
-_TRACK_PRESETS: dict[str, list[tuple[str, str]]] = {
-    "compressed": [
-        ("behavioural", "Behavioural"),
-        ("coding", "Coding"),
-        ("system_design", "System Design"),
-        ("targeted_debrief", "Targeted Debrief"),
-    ],
-    "advanced": [
-        ("googliness", "Googliness (Behavioural)"),
-        ("coding_1", "Coding 1 (Algorithms & Data Structures)"),
-        ("coding_2", "Coding 2 (Algorithms & Data Structures)"),
-        ("system_design", "System Design"),
-        ("debugging", "Debugging / Code Review (Practical Engineering)"),
-        ("targeted_debrief", "Targeted Debrief"),
-    ],
-}
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _require_env(name: str) -> str:
+def require_env(name: str) -> str:
+    """Retrieve required environment variable value or raise error if missing."""
     value = os.getenv(name, "").strip()
     if not value:
-        raise RuntimeError(f"{name} is required")
+        raise RuntimeError(f"{name} is required in environment settings")
     return value
 
 
-def _livekit_url() -> str:
-    return _require_env("LIVEKIT_URL")
+def get_livekit_url() -> str:
+    """Return configured LiveKit WebRTC server URL."""
+    return require_env("LIVEKIT_URL")
 
 
-def _room_prefix() -> str:
-    return os.getenv("LIVEKIT_ROOM_PREFIX", "aura-s4").strip() or "aura-s4"
+def get_room_prefix() -> str:
+    """Return prefix string for generated LiveKit room names."""
+    return os.getenv("LIVEKIT_ROOM_PREFIX", "talkhire-session").strip() or "talkhire-session"
 
 
-def _normalize_track_preset(track_preset: str = "") -> str:
+def normalize_interview_track_preset(track_preset: str = "") -> str:
+    """Normalize interview track preset string to canonical track name."""
     value = (track_preset or "compressed").strip().lower().replace("-", "_").replace(" ", "_")
     if value in {"advanced", "google_style", "google", "onsite"}:
         return "advanced"
@@ -82,75 +73,24 @@ def _normalize_track_preset(track_preset: str = "") -> str:
     return "compressed"
 
 
-def _load_prompt_text(path: Path) -> str:
+def read_prompt_template_file(path: Path) -> str:
+    """Read prompt template text content from specified filepath."""
     if not path.exists():
-        raise FileNotFoundError(
-            f"Required prompt file not found: {path}. "
-            "Add the missing prompt file or set BOT_SYSTEM_PROMPT env var."
-        )
-    return path.read_text().strip()
+        raise FileNotFoundError(f"Required prompt file missing: {path}")
+    return path.read_text(encoding="utf-8").strip()
 
 
-def _normalize_candidate_name(display_name: str, user_id: str) -> str:
-    candidate_name = (display_name or "").strip()
-    if not candidate_name or candidate_name.lower() in {"guest", "candidate"}:
-        candidate_name = user_id
-    if candidate_name.lower().startswith("candidate "):
-        candidate_name = candidate_name[10:].strip() or user_id
-    candidate_name = candidate_name.replace("_", " ").replace("-", " ").strip()
-    if not candidate_name:
-        candidate_name = user_id or "Candidate"
-    return " ".join(part.capitalize() for part in candidate_name.split())
+def normalize_candidate_name(display_name: str, user_id: str) -> str:
+    """Clean and format candidate display name for voice greeting."""
+    name = (display_name or "").strip()
+    if not name or name.lower() in {"guest", "candidate"}:
+        name = user_id
+    if name.lower().startswith("candidate "):
+        name = name[10:].strip() or user_id
+    return name.replace("_", " ").replace("-", " ").strip()
 
 
-def _startup_greeting(
-    *,
-    candidate_name: str,
-    is_anon: bool,
-    round_hint: str = "",
-    difficulty_hint: str = "medium",
-    topic_hint: str = "",
-) -> str:
-    intro = (
-        "Hello! I'm TalkHire, your technical interview coach."
-        if is_anon
-        else f"Hello {candidate_name}! I'm TalkHire, your technical interview coach."
-    )
-
-    normalized_round = round_hint.strip().lower().replace(" ", "_").replace("-", "_")
-    if not normalized_round:
-        return (
-            f"{intro} Great to have you here. Which round would you like to practice today — "
-            "Behavioural, Coding, System Design, or a Targeted Debrief?"
-        )
-
-    round_labels = {
-        "behavioural": "behavioural",
-        "coding": "coding",
-        "coding_1": "coding one, focused on algorithms and data structures",
-        "coding_2": "coding two, focused on algorithms and data structures",
-        "googliness": "googliness, or behavioural",
-        "system_design": "system design",
-        "debugging": "debugging and code review, focused on practical engineering",
-        "targeted_debrief": "targeted debrief",
-        "debrief": "targeted debrief",
-    }
-    round_label = round_labels.get(normalized_round, normalized_round.replace("_", " "))
-    difficulty = (difficulty_hint or "medium").strip().lower()
-    if difficulty not in {"easy", "medium", "hard"}:
-        difficulty = "medium"
-    article = "an" if difficulty[:1] in {"a", "e", "i", "o", "u"} else "a"
-    topic = topic_hint.strip().lower()
-
-    if topic:
-        return (
-            f"{intro} Great to have you here. We'll start with {article} {difficulty} {round_label} round "
-            f"focused on {topic}. Let's begin."
-        )
-    return f"{intro} Great to have you here. We'll start with {article} {difficulty} {round_label} round. Let's begin."
-
-
-def _system_instruction(
+def build_talkhire_system_instruction(
     user_id: str = "anonymous",
     display_name: str = "Guest",
     round_hint: str = "",
@@ -160,101 +100,27 @@ def _system_instruction(
     job_role: str = "",
     resume_context: str = "",
 ) -> str:
-    env_override = os.getenv("BOT_SYSTEM_PROMPT", "").strip()
-    if env_override:
-        return env_override
-
+    """Assemble lean micro-prompt system instruction for candidate voice session."""
     prompts_dir = Path(__file__).parent / "prompts"
+    prompt_mgr = PromptManager(prompts_dir)
     is_anon = _is_anon_user(user_id)
-    normalized_track = _normalize_track_preset(track_preset)
+    candidate_name = normalize_candidate_name(display_name, user_id)
 
-    greeting_path = prompts_dir / (
-        "prompt_greeting_anon.md" if is_anon else "prompt_greeting_named.md"
-    )
-    base_path = prompts_dir / (
-        "system_prompt_anon.md" if is_anon else "system_prompt_named_fast.md"
-    )
+    norm_round = round_hint.strip().lower().replace(" ", "_").replace("-", "_")
+    q_count = 5 if norm_round else 4
+    questions = select_session_questions(round_hint, difficulty_hint, count=q_count, topic=topic_hint)
 
-    candidate_name = _normalize_candidate_name(display_name, user_id)
-    greeting = _load_prompt_text(greeting_path).format(
+    return prompt_mgr.build_focused_round_prompt(
+        round_name=norm_round or "behavioural",
         candidate_name=candidate_name,
-        startup_message=_startup_greeting(
-            candidate_name=candidate_name,
-            is_anon=is_anon,
-            round_hint=round_hint,
-            difficulty_hint=difficulty_hint,
-            topic_hint=topic_hint,
-        ),
-    )
-    base_prompt = _load_prompt_text(base_path)
-
-    prompt_parts = [greeting, base_prompt]
-
-    if normalized_track == "advanced":
-        prompt_parts.append(
-            "## Interview Track\n\n"
-            "Use the advanced 6-round Google-style loop for this candidate: Googliness (Behavioural), Coding 1 (Algorithms & Data Structures), Coding 2 (Algorithms & Data Structures), System Design, Debugging / Code Review (Practical Engineering), then Targeted Debrief."
-        )
-    elif normalized_track == "adaptive_6_round":
-        prompt_parts.append(
-            f"## Adaptive 6-Round Interview Track\n\n"
-            f"You are conducting a 6-round interview for the **{job_role}** role. You MUST STRICTLY progress through these 6 rounds in order:\n"
-            f"1. Resume Screening / Introduction\n"
-            f"2. Technical Fundamentals\n"
-            f"3. Problem Solving / Coding\n"
-            f"4. System Design / Architecture\n"
-            f"5. Role-Specific Deep Dive\n"
-            f"6. Behavioral / HR Round\n\n"
-            f"**CRITICAL INSTRUCTION FOR QUESTIONS**: ALL technical questions (Rounds 2-5) MUST be generated strictly based on standard requirements for the **{job_role}** position. DO NOT generate technical questions based on the resume.\n\n"
-            f"**Resume Context (for Round 1 and Difficulty Tuning)**:\n{resume_context}\n\n"
-            f"Use the Resume Context only to guide the Introduction (Round 1), understand the candidate's background, and dynamically adapt the difficulty (focus more heavily on testing the identified weaknesses/skill gaps)."
-        )
-
-    if round_hint:
-        normalized_round = round_hint.strip().lower().replace(" ", "_").replace("-", "_")
-        round_path = prompts_dir / f"prompt_round_{normalized_round}.md"
-        if round_path.exists():
-            prompt_parts.append(_load_prompt_text(round_path))
-
-    # Pre-select questions and inject a focused bank into the system prompt.
-    # For selected rounds, keep five active questions available so TalkHire can
-    # immediately handle "pass", "next question", or "different question"
-    # without another retrieval step.
-    normalized_round = round_hint.strip().lower().replace(" ", "_").replace("-", "_")
-    question_count = 5 if normalized_round else 4
-    questions = select_session_questions(round_hint, difficulty_hint, count=question_count, topic=topic_hint)
-    if questions:
-        numbered = "\n".join(f"{i + 1}. {q}" for i, q in enumerate(questions))
-        prompt_parts.append(
-            "## Question Bank — this session only\n\n"
-            "These questions have been pre-selected for this session and difficulty. "
-            "Ask at most 3 total per round.\n\n"
-            "Rules for using the bank:\n"
-            "- Ask questions from this bank in order.\n"
-            "- If the candidate says pass, next question, skip, or similar, move to the next unused question from the bank.\n"
-            "- If the candidate asks for an easier or harder question AND unused questions remain in the bank that better match that difficulty, pick the closest one.\n"
-            "- If the candidate switches ROUND TYPE mid-session (e.g. asks for a coding question when the bank contains behavioural questions, or vice versa), DO NOT pick from the wrong-category bank. Instead, generate an appropriate question yourself from your own knowledge matching the requested round type and difficulty. Never mix round categories.\n"
-            "- Do NOT call any tool to fetch questions.\n\n"
-            + numbered
-        )
-    if topic_hint.strip():
-        prompt_parts.append(
-            f"Topic hint for this session: focus on {topic_hint.strip().lower()} when choosing from the question bank."
-        )
-
-    # Ultra-Low Latency Directives
-    prompt_parts.append(
-        "## Sub-Second Response Rules (CRITICAL)\n"
-        "To keep the interview feeling natural, you MUST follow these timing rules:\n"
-        "1. NO PREAMBLES: If you are asking a question, make the question the VERY FIRST WORDS out of your mouth. No \"Okay, moving on,\" or \"Here is your question:\". Just ask it.\n"
-        "2. SPEAK BEFORE TOOLS: If you need to use `record_answer_note` or `submit_rubric_grade`, you MUST physically speak an acknowledgment to the candidate FIRST (e.g. \"Great point.\") so they hear audio instantly. The tool call must be the LAST thing you do in your turn, not the first.\n"
-        "3. PAUSE TOLERANCE: If the user pauses mid-sentence (silence), give them a tiny moment. Acknowledge short pauses gracefully without cutting them off."
+        is_anon=is_anon,
+        resume_summary=resume_context,
+        difficulty=difficulty_hint,
+        selected_questions=questions,
     )
 
-    return "\n\n".join(part for part in prompt_parts if part)
 
-
-def _mint_token(
+def mint_livekit_token(
     *,
     room_name: str,
     identity: str,
@@ -262,12 +128,13 @@ def _mint_token(
     metadata: dict[str, Any],
     hidden: bool = False,
 ) -> str:
+    """Mint and sign JWT access token for LiveKit room participant."""
     token = (
-        api.AccessToken(_require_env("LIVEKIT_API_KEY"), _require_env("LIVEKIT_API_SECRET"))
+        api.AccessToken(require_env("LIVEKIT_API_KEY"), require_env("LIVEKIT_API_SECRET"))
         .with_identity(identity)
         .with_name(name)
         .with_metadata(json.dumps(metadata))
-        .with_ttl(timedelta(minutes=int(os.getenv("LIVEKIT_TOKEN_TTL_MINUTES", "30"))))
+        .with_ttl(timedelta(minutes=int(os.getenv("LIVEKIT_TOKEN_TTL_MINUTES", "60"))))
         .with_grants(
             api.VideoGrants(
                 room_join=True,
@@ -282,11 +149,12 @@ def _mint_token(
     return token.to_jwt()
 
 
-def _generate_room_name() -> str:
-    return f"{_room_prefix()}-{uuid4().hex[:10]}"
+def generate_room_name() -> str:
+    """Generate unique room name with talkhire prefix."""
+    return f"{get_room_prefix()}-{uuid4().hex[:10]}"
 
 
-def _launch_room_bot(
+def launch_room_bot(
     *,
     room_name: str,
     user_id: str = "anonymous",
@@ -298,12 +166,13 @@ def _launch_room_bot(
     job_role: str = "",
     resume_context: str = "",
 ) -> None:
+    """Launch async background task running TalkHireVoiceSession for room."""
     existing = _room_tasks.get(room_name)
     if existing and not existing.done():
         return
 
     bot_identity = f"bot-{room_name}"
-    bot_token = _mint_token(
+    bot_token = mint_livekit_token(
         room_name=room_name,
         identity=bot_identity,
         name="TalkHire",
@@ -311,11 +180,13 @@ def _launch_room_bot(
         hidden=False,
     )
 
-    config = build_room_config(
-        livekit_url=_livekit_url(),
+    config = build_talkhire_room_config(
+        livekit_url=get_livekit_url(),
         room_name=room_name,
         token=bot_token,
-        system_instruction=_system_instruction(user_id, display_name, round_hint, difficulty_hint, topic_hint, track_preset, job_role, resume_context),
+        system_instruction=build_talkhire_system_instruction(
+            user_id, display_name, round_hint, difficulty_hint, topic_hint, track_preset, job_role, resume_context
+        ),
         user_id=user_id,
     )
 
@@ -323,25 +194,15 @@ def _launch_room_bot(
     _room_tasks[room_name] = task
 
     def _cleanup(done_task: asyncio.Task[None]) -> None:
-        try:
-            done_task.result()
-        except asyncio.CancelledError:
-            logger.info(f"Bot task cancelled for room {room_name}")
-        except Exception:
-            logger.exception(f"Bot task failed for room {room_name}")
-        finally:
-            _room_tasks.pop(room_name, None)
+        _room_tasks.pop(room_name, None)
 
     task.add_done_callback(_cleanup)
 
 
-# ---------------------------------------------------------------------------
-# Application lifespan
-# ---------------------------------------------------------------------------
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("TalkHire Interview Coach backend starting")
+    """FastAPI application lifespan managing startup and clean shutdown of room tasks."""
+    logger.info("[bot] TalkHire backend server starting")
     yield
 
     tasks = list(_room_tasks.values())
@@ -350,14 +211,10 @@ async def lifespan(app: FastAPI):
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
     _room_tasks.clear()
-    logger.info("TalkHire backend shutdown complete")
+    logger.info("[bot] TalkHire backend server shutdown complete")
 
 
-# ---------------------------------------------------------------------------
-# FastAPI app
-# ---------------------------------------------------------------------------
-
-app = FastAPI(title="TalkHire Interview Coach - Solution 4", lifespan=lifespan)
+app = FastAPI(title="TalkHire Interview Agent Backend", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -367,11 +224,9 @@ app.add_middleware(
 )
 
 
-# ---------------------------------------------------------------------------
-# API models
-# ---------------------------------------------------------------------------
-
 class SessionBootstrapRequest(BaseModel):
+    """Request schema for bootstrapping a LiveKit interview voice session."""
+
     room_name: str | None = None
     display_name: str | None = Field(default=None, max_length=80)
     user_id: str | None = Field(default=None, max_length=64)
@@ -384,6 +239,8 @@ class SessionBootstrapRequest(BaseModel):
 
 
 class SessionBootstrapResponse(BaseModel):
+    """Response payload containing LiveKit access token and room parameters."""
+
     livekit_url: str
     room_name: str
     participant_identity: str
@@ -391,15 +248,12 @@ class SessionBootstrapResponse(BaseModel):
     access_token: str
 
 
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
-
 @app.post("/api/resume/analyze")
 async def analyze_resume(
     file: UploadFile = File(...),
-    job_role: str = Form(...)
+    job_role: str = Form(...),
 ):
+    """Parse resume file and analyze skill gaps against target job role."""
     text = ""
     content = await file.read()
     filename = file.filename.lower() if file.filename else ""
@@ -415,7 +269,7 @@ async def analyze_resume(
         else:
             text = content.decode(errors="ignore")
     except Exception as e:
-        logger.error(f"Error parsing resume: {e}")
+        logger.error(f"[bot] Error parsing resume file: {e}")
         text = content.decode(errors="ignore")
 
     if not text.strip():
@@ -437,51 +291,48 @@ async def analyze_resume(
         response = await client.chat.completions.create(
             model=model_name,
             messages=[
-                {"role": "system", "content": "You are a senior tech recruiter. Analyze the resume against the target job role. Identify 3-5 key skill gaps or weak areas in the resume compared to standard requirements for this role. Output strictly JSON with keys: skill_gaps (list of str), weak_areas (list of str), interview_focus (str)."},
+                {"role": "system", "content": "Analyze resume against job role. Return JSON: {skill_gaps: [], weak_areas: [], interview_focus: ''}"},
                 {"role": "user", "content": f"Target Role: {job_role}\n\nResume:\n{text[:10000]}"}
             ],
             response_format={"type": "json_object"}
         )
         return json.loads(response.choices[0].message.content)
     except Exception as e:
-        logger.error(f"Failed to analyze resume with LLM: {e}")
-        return {"skill_gaps": ["Unable to analyze"], "weak_areas": [], "interview_focus": "General Fundamentals"}
+        logger.error(f"[bot] Resume analysis failed: {e}")
+        return {"skill_gaps": ["Analysis unavailable"], "weak_areas": [], "interview_focus": "Fundamentals"}
 
 
 @app.post("/livekit/session", response_model=SessionBootstrapResponse)
 @app.post("/api/livekit/session", response_model=SessionBootstrapResponse)
 async def create_livekit_session(req: SessionBootstrapRequest):
-    room_name = req.room_name or _generate_room_name()
+    """Bootstrap a new LiveKit interview room session and mint participant token."""
+    room_name = req.room_name or generate_room_name()
     participant_identity = f"web-{uuid4().hex[:8]}"
     participant_name = (req.display_name or "Guest").strip() or "Guest"
     user_id = (req.user_id or "anonymous").strip() or "anonymous"
     is_anon = _is_anon_user(user_id)
-    track_preset = _normalize_track_preset(req.track_preset or "compressed")
+    track_preset = normalize_interview_track_preset(req.track_preset or "compressed")
     round_hint = (req.round_hint or "").strip()
     difficulty_hint = (req.difficulty_hint or "").strip()
     topic_hint = (req.topic_hint or "").strip()
 
     if not is_anon:
-    # If round_hint is missing, default to 'behavioural'
         if not round_hint:
             round_hint = "behavioural"
-            logger.info(f"Missing round_hint for user {user_id}, defaulting to {round_hint}")
-        # If difficulty_hint is missing, default to 'medium'
         if not difficulty_hint:
             difficulty_hint = "medium"
-            logger.info(f"Missing difficulty_hint for user {user_id}, defaulting to {difficulty_hint}")
 
     if not difficulty_hint:
         difficulty_hint = "medium"
 
-    access_token = _mint_token(
+    access_token = mint_livekit_token(
         room_name=room_name,
         identity=participant_identity,
         name=participant_name,
         metadata={"role": "user", "room": room_name, "user_id": user_id},
     )
 
-    _launch_room_bot(
+    launch_room_bot(
         room_name=room_name,
         user_id=user_id,
         display_name=participant_name,
@@ -494,7 +345,7 @@ async def create_livekit_session(req: SessionBootstrapRequest):
     )
 
     return SessionBootstrapResponse(
-        livekit_url=_livekit_url(),
+        livekit_url=get_livekit_url(),
         room_name=room_name,
         participant_identity=participant_identity,
         participant_name=participant_name,
@@ -505,58 +356,51 @@ async def create_livekit_session(req: SessionBootstrapRequest):
 @app.get("/health")
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
-    active_room_count = sum(1 for task in _room_tasks.values() if not task.done())
+    """Return backend service health status and active room count."""
+    active_count = sum(1 for task in _room_tasks.values() if not task.done())
     return {
         "status": "ok",
         "bot": "TalkHire",
         "transport": "livekit",
-        "model": os.getenv("AZURE_VOICELIVE_MODEL", "gpt-realtime"),
-        "active_rooms": active_room_count,
+        "active_rooms": active_count,
     }
 
 
 @app.get("/api/summary/{room_name}")
 @app.get("/summary/{room_name}")
 async def get_room_summary(room_name: str) -> dict[str, Any]:
-    """HTTP fallback for call-summary when the data channel closed before delivery."""
+    """Return HTTP summary data fallback for room session."""
     from bot.pipelines.voice import _room_summaries
     data = _room_summaries.get(room_name, None)
     if data is None:
         return {"status": "pending"}
     return {"status": "ready", "data": data}
 
+
 @app.get("/api/candidate/check")
 async def check_candidate(user_id: str = "") -> dict[str, Any]:
+    """Check candidate prior session persistence status."""
     uid = user_id.strip().lower()[:64]
     if not uid or uid == "anonymous":
         return {"exists": False, "rounds": 0, "user_id": uid}
-    
-    svc = _get_session_service()
+
+    svc = get_session_service()
     if not svc:
         return {"exists": False, "rounds": 0, "user_id": uid}
-    
-    # Check if a session file exists for this user
-    app_name = "talkhire"
-    state = await svc.load_user_state(app_name, uid)
+
+    state = await svc.load_user_state("talkhire", uid)
     exists = state is not None
-    # Optional: count "rounds" from state – you'd need to parse the session history
-    rounds = 1 if exists else 0
-    return {"exists": exists, "rounds": rounds, "user_id": uid}
-# ---------------------------------------------------------------------------
-# Static frontend
-# ---------------------------------------------------------------------------
+    return {"exists": exists, "rounds": 1 if exists else 0, "user_id": uid}
+
 
 if _FRONTEND_DIST.exists():
     app.mount("/", StaticFiles(directory=str(_FRONTEND_DIST), html=True), name="frontend")
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 def main() -> None:
+    """Launch uvicorn ASGI server hosting TalkHire FastAPI application."""
     uvicorn.run(
-       app,  
+        app,
         host="0.0.0.0",
         port=int(os.getenv("PORT", "7862")),
         log_level="info",

@@ -1,48 +1,52 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Mic, Menu } from 'lucide-react';
+import React from "react";
+import { Mic, Sparkles, Shield, Activity } from "lucide-react";
 
 interface NavbarProps {
-  onStart: () => void;
+  activeSession: bool;
+  onResetSession?: () => void;
 }
 
-export function Navbar({ onStart }: NavbarProps) {
+export const Navbar: React.FC<NavbarProps> = ({ activeSession, onResetSession }) => {
   return (
-    <nav className="fixed top-0 w-full z-50 glass border-b border-zinc-800/50 transition-all duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center border border-indigo-500/30">
-              <Mic className="w-5 h-5 text-indigo-400" />
-            </div>
-            <span className="text-xl font-semibold tracking-tight text-zinc-50">TalkHire</span>
+    <header className="sticky top-0 z-50 glass-panel border-b border-slate-800/80 backdrop-blur-xl">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div 
+          className="flex items-center gap-3 cursor-pointer group"
+          onClick={onResetSession}
+        >
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+            <Mic className="w-5 h-5 text-white" />
           </div>
-          
-          <div className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-sm text-zinc-400 hover:text-zinc-50 transition-colors">Features</a>
-            <a href="#pricing" className="text-sm text-zinc-400 hover:text-zinc-50 transition-colors">Pricing</a>
-            <div className="flex items-center gap-4">
-              <button className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-                Log In
-              </button>
-              <motion.button 
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={onStart}
-                className="px-4 py-2 text-sm font-medium rounded-full bg-zinc-50 text-zinc-950 hover:bg-zinc-200 transition-colors"
-              >
-                Start Free Trial
-              </motion.button>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-xl tracking-tight text-white">Talk</span>
+              <span className="font-extrabold text-xl tracking-tight gradient-text-primary">Hire</span>
+              <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                Live AI
+              </span>
             </div>
           </div>
+        </div>
 
-          <div className="md:hidden flex items-center">
-            <button className="text-zinc-400 hover:text-zinc-50">
-              <Menu className="w-6 h-6" />
-            </button>
+        <div className="flex items-center gap-4">
+          {activeSession ? (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>Interview Session Active</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 text-xs font-medium">
+              <Activity className="w-3.5 h-3.5 text-indigo-400" />
+              <span>System Ready</span>
+            </div>
+          )}
+
+          <div className="hidden sm:flex items-center gap-1 text-xs text-slate-400 bg-slate-900/60 px-3 py-1.5 rounded-lg border border-slate-800">
+            <Shield className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Encrypted WebRTC</span>
           </div>
         </div>
       </div>
-    </nav>
+    </header>
   );
-}
+};
